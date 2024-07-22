@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Calendar</title>
+    <link href='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css' rel='stylesheet' />
+    <style>
+        #calendar {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .form-container {
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            width: 80%;
+            max-width: 500px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .modal-content button {
+            margin-right: 10px;
+        }
+        .btn-container {
+            text-align: center;
+            margin: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Event Calendar</h1>
+    <div class="btn-container">
+        <button id="addEventBtn">Add Event</button>
+        <button id="clearStorageBtn">Clear Local Storage</button>
+    </div>
+    <div id="calendar"></div>
+
+    <div id="eventModal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle">Event Details</h2>
+            <form id="eventForm">
+                <label for="title">Title:</label><br>
+                <input type="text" id="title" name="title" required><br><br>
+
+                <label for="start_date">Start Date:</label><br>
+                <input type="date" id="start_date" name="start_date" required><br>
+                <input type="time" id="start_time" name="start_time" required><br><br>
+
+                <label for="end_date">End Date:</label><br>
+                <input type="date" id="end_date" name="end_date" required><br>
+                <input type="time" id="end_time" name="end_time" required><br><br>
+
+                <label for="location">Location:</label><br>
+                <input type="text" id="location" name="location"><br><br>
+
+                <button type="submit" id="saveBtn">Save</button>
+                <button type="button" id="deleteBtn">Delete</button>
+                <button type="button" id="closeBtn">Close</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Load FullCalendar -->
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js'></script>
+    <!-- Custom script -->
+    <script>
+        let currentEventId = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            var calendarEl = document.getElementById('calendar');
+            var calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                events: loadEvents(),
+                editable: true,
+                eventClick: function(info) {
+                    currentEventId = info.event.id;
+                    document.getElementById('title').value = info.event.title;
+                    document.getElementById('start_date').value = info.event.startStr.split('T')[0];
+                    document.getElementById('start_time').value = info.event.startStr.split('T')[1];
+                    document.getElementById('end_date').value = info.event.endStr.split('T')[0];
+                    document.getElementById('end_time').value = info.event.endStr.split('T')[1];
+                    document.getElementById('location').value = info.event.extendedProps.location || '';
+                    document.getElementById('eventModal').style.display = 'flex';
+                },
+                eventAdd: function(info) {
+                    saveEvents(calendar.getEvents());
+                },
+                eventRemove: function(info) {
+                    saveEvents(calendar.getEvents());
+                },
+                eventChange: function(info) {
+                    saveEvents(calendar.getEvents());
+                }
+            });
+            calendar.render();
+
+            // Event handler for the "Add Event" button
+            document.getElementById('addEventBtn').addEventListener('click', function() {
+                currentEventId = null; // Clear currentEventId to indicate adding a new event
+                document.getElementById('title').value = '';
+                document.getElementById('start_date').value = '';
+                document.getElementById('start_time').value = '';
+                document.getElementById('end_date').value = '';
+                document.getElementById('end_time').value = '';
+                document.getElementById('location').value = '';
+                document.getElementById('modalTitle').innerText = 'Add New Event';
+                document.getElementById('deleteBtn').style.display = 'none'; // Hide delete button when adding new event
+                document.getElementById('eventModal').style.display = 'flex';
+            });
+
+            document.getElementById('eventForm').addEventListener('submit', function(event) {
+                event.preventDefault();
+                var title = document.getElementById('title').value;
+                var startDate = document.getElementById('start_date').value;
+                var startTime = document.getElementById('start_time').value;
+                var endDate = document.getElementById('end_date').value;
+                var endTime = document.getElementById('end_time').value;
+                var location = document.getElementById('location').value;
+
+                var start = startDate + 'T' + startTime;
+                var end = endDate + 'T' + endTime;
+
+                if (currentEventId) {
+                    var event = calendar.getEventById(currentEventId);
+                    event.setProp('title', title);
+                    event.setStart(start);
+                    event.setEnd(end);
+                    event.setExtendedProp('location', location);
+                } else {
+                    var newEvent = {
+                        id: new Date().getTime().toString(),
+                        title: title,
+                        start: start,
+                        end: end,
+                        location: location
+                    };
+                    calendar.addEvent(newEvent);
+                }
+
+                saveEvents(calendar.getEvents());
+                closeModal();
+            });
+
+            document.getElementById('deleteBtn').addEventListener('click', function() {
+                if (currentEventId) {
+                    var event = calendar.getEventById(currentEventId);
+                    event.remove();
+                    saveEvents(calendar.getEvents());
+                    closeModal();
+                }
+            });
+
+            document.getElementById('closeBtn').addEventListener('click', function() {
+                closeModal();
+            });
+
+            document.getElementById('clearStorageBtn').addEventListener('click', function() {
+                localStorage.removeItem('events');
+                calendar.removeAllEvents();
+            });
+
+            function closeModal() {
+                document.getElementById('eventModal').style.display = 'none';
+                currentEventId = null;
+            }
+        });
+
+        function loadEvents() {
+            var events = JSON.parse(localStorage.getItem('events')) || [];
+            return events;
+        }
+
+        function saveEvents(events) {
+            var eventsData = events.map(event => ({
+                id: event.id,
+                title: event.title,
+                start: event.startStr,
+                end: event.endStr,
+                location: event.extendedProps.location || ''
+            }));
+            localStorage.setItem('events', JSON.stringify(eventsData));
+        }
+    </script>
+</body>
+</html>
